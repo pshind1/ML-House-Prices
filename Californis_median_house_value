@@ -1,0 +1,1036 @@
+
+
+import pandas as pd
+import os
+
+housing_path='/home/pushkarshinde'
+
+def load_housing_data(housing_path=housing_path):
+    csv_path=os.path.join(housing_path,'housing.csv')
+    print(csv_path)
+    return pd.read_csv(csv_path)
+
+
+# In[5]:
+
+
+housing=load_housing_data()
+housing.head(5)
+
+
+# In[6]:
+
+
+get_ipython().run_line_magic('matplotlib', 'inline')
+import matplotlib.pyplot as plt
+housing.hist(bins=50, figsize=(20,15))
+plt.show()
+
+
+# In[7]:
+
+
+import numpy as np
+np.random.seed(43)
+
+
+# In[8]:
+
+
+def split_train_test(data, test_ratio):
+    shuffled_indices=np.random.permutation(len(data))
+    test_set_size=int(len(data)*test_ratio)
+    test_indices=shuffled_indices[:test_set_size]
+    train_indices=shuffled_indices[test_set_size:]
+    return data.iloc[test_indices], data.iloc[train_indices]
+
+train_set, test_set = split_train_test(housing, 0.2)
+print(len(train_set),'train set size & ',len(test_set),'test_set_size')
+
+
+# In[9]:
+
+
+s=[ 0,  5, 11,  1,  8, 16,  3, 13, 15, 17,  2,  9, 18,  4, 12,  7, 10,
+       14,  6]
+
+
+# In[10]:
+
+
+k=[1,2,3,4,5,6,7,8,9,12,11,13,14,15,16,17]
+np.random.seed(42)
+np.random.permutation(len(k))
+
+
+# In[11]:
+
+
+housing['median_income'].hist()
+plt.show()
+
+
+# In[12]:
+
+
+housing["income_cal"]=np.ceil(housing['median_income']/1.5)
+
+
+# In[13]:
+
+
+housing["income_cal"].where(housing["income_cal"]<5,5.0, inplace=True)
+
+
+# In[14]:
+
+
+housing["income_cal"].value_counts()
+
+
+# In[15]:
+
+
+housing.head(2)
+
+
+# In[16]:
+
+
+#Stratified sampling using StratifiedShuffleSplit class
+from sklearn.model_selection import StratifiedShuffleSplit
+
+split = StratifiedShuffleSplit(n_splits=1,test_size=0.2, random_state=41)
+for train_index, test_index in split.split(housing, housing['income_cal']):
+    strat_train_set=housing.loc[train_index]
+    strat_test_set=housing.loc[test_index]
+
+
+# In[17]:
+
+
+strat_test_set['income_cal'].value_counts()/len(strat_test_set)
+
+
+# In[18]:
+
+
+#Comparing income value in random sampling and stratified sampling
+from sklearn.model_selection import train_test_split
+
+def income_cal_proportions(data):
+    return data['income_cal'].value_counts()/len(data)
+
+train_set,test_set=train_test_split(housing, test_size=0.2, random_state=42)
+
+compare_props= pd.DataFrame({
+    'Overall' : income_cal_proportions(housing),
+    'Random' : income_cal_proportions(test_set),
+    'Stratified' : income_cal_proportions(strat_test_set) 
+}).sort_index()
+
+compare_props['Random. %error']=((compare_props['Overall'] -compare_props['Random'])/compare_props['Overall'])*100
+compare_props['Stratified %error']=((compare_props['Overall'] -compare_props['Stratified'])/compare_props['Overall'])*100
+
+
+
+# In[19]:
+
+
+compare_props.sort_index()
+
+
+# In[20]:
+
+
+for set_ in(strat_train_set, strat_test_set):
+    set_.drop("income_cal", axis=1, inplace =True)
+
+
+# # Discovering & Visualizing the Data to grain insights
+
+# In[21]:
+
+
+housing=strat_train_set.copy()
+
+
+# In[22]:
+
+
+housing.size
+
+
+# In[23]:
+
+
+housing.plot(kind="scatter", x='longitude', y='latitude')
+
+
+# In[24]:
+
+
+housing.plot(kind="scatter", x='longitude', y='latitude', alpha=0.1)
+
+
+# In[25]:
+
+
+housing.plot(kind="scatter", x="longitude", y="latitude", alpha=0.5,
+            s=housing['population']/100, label="population", figsize=(10,7),
+           c="median_house_value" , cmap=plt.get_cmap("jet"), colorbar=True,
+            sharex=False
+            )
+plt.legend()
+
+
+# In[26]:
+
+
+corr_matrix=housing.corr()
+corr_matrix['median_house_value'].sort_values(ascending=False)
+
+
+# In[27]:
+
+
+from pandas.plotting import scatter_matrix
+
+attributes=['median_house_value','median_income','total_rooms','housing_median_age']
+scatter_matrix(housing[attributes], figsize=(10,7))
+
+
+# In[28]:
+
+
+housing.plot(kind="scatter", y="median_house_value", x="median_income", alpha=0.5 ,figsize=(10,7))
+plt.axis([0,16,0,550000])
+
+
+# In[29]:
+
+
+#ATTRIBUTE COMBINATION
+housing["rooms_per_household"]=housing["total_rooms"]/housing["households"]
+
+housing["bedroom_per_room"]=housing["total_bedrooms"]/housing["total_rooms"]
+
+housing["population_per_household"]=housing["population"]/housing["households"]
+
+
+# In[30]:
+
+
+corr_matrix = housing.corr()
+corr_matrix['median_house_value'].sort_values(ascending=False)
+
+
+# In[31]:
+
+
+attribute=['median_house_value','rooms_per_household','total_rooms','bedroom_per_room','population_per_household']
+scatter_matrix(housing[attribute],figsize=(10,7))
+
+
+# In[32]:
+
+
+import matplotlib.pyplot as plt
+housing.plot(kind="scatter", x="median_house_value", y="bedroom_per_room", alpha=0.4)
+
+
+# # 4. Prepare data for ML
+
+# In[33]:
+
+
+#revert the process to initial clean statified tran data set
+
+housing= strat_train_set.drop("median_house_value", axis=1)
+housing_labels= strat_train_set["median_house_value"].copy()
+
+
+# In[34]:
+
+
+isn=housing.isnull()
+isn.any(axis=1)
+
+
+# In[35]:
+
+
+#from sklearn.preprocessing import Imputer
+from sklearn.impute import SimpleImputer
+imputer = SimpleImputer(strategy='median')
+
+
+# In[36]:
+
+
+#remove text attribute as median usinh imputer can only be cal of numeric attribute
+housing_num=housing.drop("ocean_proximity", axis=1)
+
+
+# In[37]:
+
+
+#fit the iputer instance to taining data
+imputer.fit(housing_num)
+
+
+# In[38]:
+
+
+imputer.statistics_
+
+
+# In[39]:
+
+
+#transforming the training set
+
+X=imputer.transform(housing_num)
+X
+
+
+# In[40]:
+
+
+housing_tr = pd.DataFrame(X, columns=housing_num.columns)
+housing_tr.info()
+
+
+# In[41]:
+
+
+#convert ocean proximity to numbers
+housing_cat=housing["ocean_proximity"]
+housing_cat.head(2)
+
+
+# In[42]:
+
+
+#pandas factorize example
+
+df=pd.DataFrame({
+    'A':['type1', 'type2', 'type3','type2','type0']
+})
+df['A'].factorize()
+
+
+# In[43]:
+
+
+#converting ocean proximity to numeric using factorize()
+
+housing_cat_encoded,housing_categories=housing_cat.factorize()
+housing_cat_encoded
+
+
+# In[44]:
+
+
+housing_categories
+
+
+# In[45]:
+
+
+housing_cat_encoded.reshape(-1,1)
+
+
+# In[46]:
+
+
+# We can convert each categorical value to a one-hot vector using a `OneHotEncoder`
+# Note that fit_transform() expects a 2D array
+# but housing_cat_encoded is a 1D array, so we need to reshape it
+
+from sklearn.preprocessing import OneHotEncoder
+
+encoder=OneHotEncoder()
+housing_cat_1hot=encoder.fit_transform(housing_cat_encoded.reshape(-1,1))
+housing_cat_1hot
+
+
+# In[47]:
+
+
+#OneHotEncoder returns sparse array by default we can convert it to dense array
+housing_cat_1hot.toarray()
+
+
+# In[48]:
+
+
+# Just run this cell, or copy it to your code, do not try to understand it (yet).
+# Definition of the CategoricalEncoder class, copied from PR #9151.
+
+from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.utils import check_array
+from sklearn.preprocessing import LabelEncoder
+from scipy import sparse
+
+class CategoricalEncoder(BaseEstimator, TransformerMixin):
+    """Encode categorical features as a numeric array.
+    The input to this transformer should be a matrix of integers or strings,
+    denoting the values taken on by categorical (discrete) features.
+    The features can be encoded using a one-hot aka one-of-K scheme
+    (``encoding='onehot'``, the default) or converted to ordinal integers
+    (``encoding='ordinal'``).
+    This encoding is needed for feeding categorical data to many scikit-learn
+    estimators, notably linear models and SVMs with the standard kernels.
+    Read more in the :ref:`User Guide <preprocessing_categorical_features>`.
+    Parameters
+    ----------
+    encoding : str, 'onehot', 'onehot-dense' or 'ordinal'
+        The type of encoding to use (default is 'onehot'):
+        - 'onehot': encode the features using a one-hot aka one-of-K scheme
+          (or also called 'dummy' encoding). This creates a binary column for
+          each category and returns a sparse matrix.
+        - 'onehot-dense': the same as 'onehot' but returns a dense array
+          instead of a sparse matrix.
+        - 'ordinal': encode the features as ordinal integers. This results in
+          a single column of integers (0 to n_categories - 1) per feature.
+    categories : 'auto' or a list of lists/arrays of values.
+        Categories (unique values) per feature:
+        - 'auto' : Determine categories automatically from the training data.
+        - list : ``categories[i]`` holds the categories expected in the ith
+          column. The passed categories are sorted before encoding the data
+          (used categories can be found in the ``categories_`` attribute).
+    dtype : number type, default np.float64
+        Desired dtype of output.
+    handle_unknown : 'error' (default) or 'ignore'
+        Whether to raise an error or ignore if a unknown categorical feature is
+        present during transform (default is to raise). When this is parameter
+        is set to 'ignore' and an unknown category is encountered during
+        transform, the resulting one-hot encoded columns for this feature
+        will be all zeros.
+        Ignoring unknown categories is not supported for
+        ``encoding='ordinal'``.
+    Attributes
+    ----------
+    categories_ : list of arrays
+        The categories of each feature determined during fitting. When
+        categories were specified manually, this holds the sorted categories
+        (in order corresponding with output of `transform`).
+    Examples
+    --------
+    Given a dataset with three features and two samples, we let the encoder
+    find the maximum value per feature and transform the data to a binary
+    one-hot encoding.
+    >>> from sklearn.preprocessing import CategoricalEncoder
+    >>> enc = CategoricalEncoder(handle_unknown='ignore')
+    >>> enc.fit([[0, 0, 3], [1, 1, 0], [0, 2, 1], [1, 0, 2]])
+    ... # doctest: +ELLIPSIS
+    CategoricalEncoder(categories='auto', dtype=<... 'numpy.float64'>,
+              encoding='onehot', handle_unknown='ignore')
+    >>> enc.transform([[0, 1, 1], [1, 0, 4]]).toarray()
+    array([[ 1.,  0.,  0.,  1.,  0.,  0.,  1.,  0.,  0.],
+           [ 0.,  1.,  1.,  0.,  0.,  0.,  0.,  0.,  0.]])
+    See also
+    --------
+    sklearn.preprocessing.OneHotEncoder : performs a one-hot encoding of
+      integer ordinal features. The ``OneHotEncoder assumes`` that input
+      features take on values in the range ``[0, max(feature)]`` instead of
+      using the unique values.
+    sklearn.feature_extraction.DictVectorizer : performs a one-hot encoding of
+      dictionary items (also handles string-valued features).
+    sklearn.feature_extraction.FeatureHasher : performs an approximate one-hot
+      encoding of dictionary items or strings.
+    """
+
+    def __init__(self, encoding='onehot', categories='auto', dtype=np.float64,
+                 handle_unknown='error'):
+        self.encoding = encoding
+        self.categories = categories
+        self.dtype = dtype
+        self.handle_unknown = handle_unknown
+
+    def fit(self, X, y=None):
+        """Fit the CategoricalEncoder to X.
+        Parameters
+        ----------
+        X : array-like, shape [n_samples, n_feature]
+            The data to determine the categories of each feature.
+        Returns
+        -------
+        self
+        """
+
+        if self.encoding not in ['onehot', 'onehot-dense', 'ordinal']:
+            template = ("encoding should be either 'onehot', 'onehot-dense' "
+                        "or 'ordinal', got %s")
+            raise ValueError(template % self.handle_unknown)
+
+        if self.handle_unknown not in ['error', 'ignore']:
+            template = ("handle_unknown should be either 'error' or "
+                        "'ignore', got %s")
+            raise ValueError(template % self.handle_unknown)
+
+        if self.encoding == 'ordinal' and self.handle_unknown == 'ignore':
+            raise ValueError("handle_unknown='ignore' is not supported for"
+                             " encoding='ordinal'")
+
+        X = check_array(X, dtype=np.object, accept_sparse='csc', copy=True)
+        n_samples, n_features = X.shape
+
+        self._label_encoders_ = [LabelEncoder() for _ in range(n_features)]
+
+        for i in range(n_features):
+            le = self._label_encoders_[i]
+            Xi = X[:, i]
+            if self.categories == 'auto':
+                le.fit(Xi)
+            else:
+                valid_mask = np.in1d(Xi, self.categories[i])
+                if not np.all(valid_mask):
+                    if self.handle_unknown == 'error':
+                        diff = np.unique(Xi[~valid_mask])
+                        msg = ("Found unknown categories {0} in column {1}"
+                               " during fit".format(diff, i))
+                        raise ValueError(msg)
+                le.classes_ = np.array(np.sort(self.categories[i]))
+
+        self.categories_ = [le.classes_ for le in self._label_encoders_]
+
+        return self
+
+    def transform(self, X):
+        """Transform X using one-hot encoding.
+        Parameters
+        ----------
+        X : array-like, shape [n_samples, n_features]
+            The data to encode.
+        Returns
+        -------
+        X_out : sparse matrix or a 2-d array
+            Transformed input.
+        """
+        X = check_array(X, accept_sparse='csc', dtype=np.object, copy=True)
+        n_samples, n_features = X.shape
+        X_int = np.zeros_like(X, dtype=np.int)
+        X_mask = np.ones_like(X, dtype=np.bool)
+
+        for i in range(n_features):
+            valid_mask = np.in1d(X[:, i], self.categories_[i])
+
+            if not np.all(valid_mask):
+                if self.handle_unknown == 'error':
+                    diff = np.unique(X[~valid_mask, i])
+                    msg = ("Found unknown categories {0} in column {1}"
+                           " during transform".format(diff, i))
+                    raise ValueError(msg)
+                else:
+                    # Set the problematic rows to an acceptable value and
+                    # continue `The rows are marked `X_mask` and will be
+                    # removed later.
+                    X_mask[:, i] = valid_mask
+                    X[:, i][~valid_mask] = self.categories_[i][0]
+            X_int[:, i] = self._label_encoders_[i].transform(X[:, i])
+
+        if self.encoding == 'ordinal':
+            return X_int.astype(self.dtype, copy=False)
+
+        mask = X_mask.ravel()
+        n_values = [cats.shape[0] for cats in self.categories_]
+        n_values = np.array([0] + n_values)
+        indices = np.cumsum(n_values)
+
+        column_indices = (X_int + indices[:-1]).ravel()[mask]
+        row_indices = np.repeat(np.arange(n_samples, dtype=np.int32),
+                                n_features)[mask]
+        data = np.ones(n_samples * n_features)[mask]
+
+        out = sparse.csc_matrix((data, (row_indices, column_indices)),
+                                shape=(n_samples, indices[-1]),
+                                dtype=self.dtype).tocsr()
+        if self.encoding == 'onehot-dense':
+            return out.toarray()
+        else:
+            return out
+
+
+# In[49]:
+
+
+#the categoricalencoder expects a 2D array containing 1 or more imput feature
+#We need to reshape 'housing_cat' to a 2D array
+
+cat_encoder= CategoricalEncoder(encoding="onehot-dense")
+housing_cat_reshaped=housing_cat.values.reshape(-1,1)
+housinh_cat_1hot=cat_encoder.fit_transform(housing_cat_reshaped)
+housinh_cat_1hot
+
+
+# In[50]:
+
+
+cat_encoder.categories_
+
+
+# Let's create a custom transformer to add extra attributes:
+
+# In[51]:
+
+
+from sklearn.base import BaseEstimator, TransformerMixin
+
+# column index
+rooms_ix, bedrooms_ix, population_ix, household_ix = 3, 4, 5, 6
+
+class CombinedAttributesAdder(BaseEstimator, TransformerMixin):
+    def __init__(self, add_bedrooms_per_room = True): # no *args or **kargs
+        self.add_bedrooms_per_room = add_bedrooms_per_room
+    def fit(self, X, y=None):
+        return self  # nothing else to do
+    def transform(self, X, y=None):
+        rooms_per_household = X[:, rooms_ix] / X[:, household_ix]
+        population_per_household = X[:, population_ix] / X[:, household_ix]
+        if self.add_bedrooms_per_room:
+            bedrooms_per_room = X[:, bedrooms_ix] / X[:, rooms_ix]
+            return np.c_[X, rooms_per_household, population_per_household,
+                         bedrooms_per_room]
+        else:
+            return np.c_[X, rooms_per_household, population_per_household]
+
+attr_adder = CombinedAttributesAdder(add_bedrooms_per_room=False)
+housing_extra_attribs = attr_adder.transform(housing.values)
+housing_extra_attribs = pd.DataFrame(housing_extra_attribs, columns=list(housing.columns)+["rooms_per_household", "population_per_household"])
+housing_extra_attribs.head()
+
+
+# In[52]:
+
+
+housing_extra_attribs.describe()
+
+
+# In[53]:
+
+
+# Now let's build a pipeline for preprocessing the numerical attributes:
+
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
+
+num_pipeline = Pipeline([
+        ('imputer', SimpleImputer(strategy="median")),
+        ('attribs_adder', CombinedAttributesAdder()),
+        ('std_scaler', StandardScaler()),
+    ])
+
+housing_num_tr = num_pipeline.fit_transform(housing_num)
+
+
+# In[54]:
+
+
+housing_num_tr
+
+
+# And a transfomer to just select a subset of the pandas DF column
+
+# In[55]:
+
+
+from sklearn.base import BaseEstimator, TransformerMixin
+
+# Create a class to select numerical or categorical columns 
+# since Scikit-Learn doesn't handle DataFrames yet
+class DataFrameSelector(BaseEstimator, TransformerMixin):
+    def __init__(self, attribute_names):
+        self.attribute_names = attribute_names
+    def fit(self, X, y=None):
+        return self
+    def transform(self, X):
+        return X[self.attribute_names].values
+
+
+# In[56]:
+
+
+#Joining all these components into a big pipeline that
+#will process both the numeric and categorical feature
+
+num_attribs=list(housing_num)
+cat_attribs=["ocean_proximity"]
+
+num_pipeline =Pipeline([
+    ('selector', DataFrameSelector(num_attribs)),
+    ('imputer', SimpleImputer(strategy="median")),
+    ('attribs_adder', CombinedAttributesAdder()),
+    ('std_encoder', StandardScaler())
+    
+])
+
+cat_pipeline= Pipeline([
+    ('selector', DataFrameSelector(cat_attribs)),
+    ('cat_encoder', CategoricalEncoder(encoding="onehot-dense"))
+])
+
+
+# In[57]:
+
+
+num_pipeline.fit_transform(housing)
+
+
+# In[58]:
+
+
+#Joining both pipelines
+from sklearn.pipeline import FeatureUnion
+
+full_pipeline = FeatureUnion( transformer_list=[
+    ("num_pipeline",num_pipeline),
+    ("cat_pipeline", cat_pipeline)
+])
+
+
+# In[59]:
+
+
+housing.head(2)
+
+
+# In[60]:
+
+
+housing_prepared=full_pipeline.fit_transform(housing)
+
+
+# In[61]:
+
+
+print(housing_prepared[0])
+
+
+# In[62]:
+
+
+#trainModel: LinearRegression
+from sklearn.linear_model import LinearRegression
+
+lin_reg=LinearRegression()
+lin_reg.fit(housing_prepared, housing_labels)
+
+
+# In[63]:
+
+
+#lets run the pipeline for a few instances
+
+some_data=housing.iloc[:5]
+some_labels=housing_labels.iloc[:5]
+some_data_prepared = full_pipeline.transform(some_data)
+
+print('prediction :', lin_reg.predict(some_data_prepared) )
+
+
+# In[64]:
+
+
+#Compare against the true values
+
+print("labels", list(some_labels))
+
+
+# In[65]:
+
+
+#checking prediction accuracy using mean_squared_error
+
+from sklearn.metrics import mean_squared_error
+
+housing_prediction= lin_reg.predict(some_data_prepared)
+lin_mse= mean_squared_error(some_labels, housing_prediction )
+lin_rmse= np.sqrt(lin_mse)
+print(lin_rmse)
+
+
+# In[66]:
+
+
+#Applying Decision Tree Model
+
+from sklearn.tree import DecisionTreeRegressor
+tree_reg=DecisionTreeRegressor(random_state=42)
+tree_reg.fit(housing_prepared,housing_labels)
+
+
+# In[67]:
+
+
+#error in prediction
+from sklearn.metrics import mean_squared_error
+
+housing_predict=tree_reg.predict(housing_prepared)
+tree_mse=mean_squared_error(housing_predict, housing_labels)
+tree_rmse=np.sqrt(tree_mse)
+tree_rmse
+
+#0.0 as it is training and predicting same data
+#overfitting case
+
+
+# In[68]:
+
+
+#peform k-fold validation
+#randomly split the training set into 10 distinct subsets called folds
+#then it trains and evaluates the decision treemodel 10 times by
+#picking a differnt fold for evaluating every time and training on the other 9 folds
+#The result is an array containing the 10 evaluation score
+
+from sklearn.model_selection import cross_val_score
+scores=cross_val_score(tree_reg, housing_prepared, housing_labels,
+                      scoring="neg_mean_squared_error", cv=10)
+tree_rmse_score = np.sqrt(-scores)
+
+
+# In[69]:
+
+
+#look at the scores of cross-validationof descisiontreerer=gressor
+
+def display_scores(scores):
+    print('10Error:', scores)
+    print('Mean_Error:', scores.mean())
+    print('Std Dev:', scores.std())
+
+
+# In[70]:
+
+
+display_scores(tree_rmse_score)
+
+
+# In[71]:
+
+
+#now compute the same score using linear regression
+
+lin_scores= cross_val_score(lin_reg, housing_prepared, housing_labels,
+                            scoring="neg_mean_squared_error", cv=10)
+lin_rmse_score=np.sqrt(-lin_scores)
+
+display_scores(lin_rmse_score)
+
+
+# In[72]:
+
+
+#lets train our model using random forest
+
+from sklearn.ensemble import RandomForestRegressor
+
+forest_reg=RandomForestRegressor(random_state=42)
+forest_reg.fit(housing_prepared, housing_labels)
+
+
+# In[73]:
+
+
+housing_predictions=forest_reg.predict(housing_prepared)
+forest_mse=mean_squared_error(housing_labels, housing_predictions)
+
+forest_rmse= np.sqrt(forest_mse)
+
+forest_rmse
+
+
+# In[74]:
+
+
+#lets train random forest using cross validation
+
+from sklearn.model_selection import cross_val_score
+
+forest_scores= cross_val_score(forest_reg, housing_prepared,
+                              housing_labels, scoring="neg_mean_squared_error", cv=10)
+forest_rmse_scores = np.sqrt(-forest_scores)
+
+
+# In[75]:
+
+
+display_scores(forest_rmse_scores)
+
+
+# In[76]:
+
+
+#Code to plot DT not of great use
+#from sklearn import tree
+
+#clf = tree.DecisionTreeClassifier(random_state=0)
+#clf=clf.fit(housing_prepared,housing_labels)
+#tree.plot_tree(clf)
+
+
+# In[79]:
+
+
+#Fine tuning the model
+#apart from 2 paramters(slope, intercept) there are few more paramters that needed to 
+#be set manually and tuned
+#the hyperparameters in DT are number of DT in and no. of features 
+#considered by each tree when splitting a node
+#Using grid search we evaluate 
+#all possible combination of hyperparameters
+#values using cross validation
+
+
+# In[80]:
+
+
+from sklearn.model_selection import GridSearchCV
+
+param_grid=[
+    {'n_estimators':[3,10,30],'max_features':[2,4,6]},
+    {'bootstrap':[False], 'n_estimators':[3,10],
+    'max_features':[2,3,4]
+    },
+]
+
+forest_reg= RandomForestRegressor(random_state=42)
+grid_search=GridSearchCV(forest_reg, param_grid,
+                         cv=5, scoring="neg_mean_squared_error")
+grid_search.fit(housing_prepared, housing_labels)
+
+
+# In[81]:
+
+
+grid_search.best_params_
+
+
+# In[82]:
+
+
+grid_search.best_estimator_
+
+
+# In[83]:
+
+
+cvres= grid_search.cv_results_
+for mean_scores, params in zip(cvres['mean_test_score'], cvres['params']):
+    print(np.sqrt(-mean_scores),params)
+
+
+# In[84]:
+
+
+#randomized search used when we are sure about the parameter values
+#or large number of paramters space
+
+from sklearn.model_selection import RandomizedSearchCV
+from scipy.stats import randint
+param_distribs={
+    'n_estimators':randint(low=1, high=200),
+    'max_features':randint(low=1, high=8)
+}
+
+forest_reg=RandomForestRegressor(random_state=42)
+rnd_search=RandomizedSearchCV(forest_reg, param_distributions=param_distribs,
+                           n_iter=10, cv=5, scoring="neg_mean_squared_error",
+                           random_state=42)
+
+rnd_search.fit(housing_prepared, housing_labels)
+
+
+# In[85]:
+
+
+cvres= rnd_search.cv_results_
+for mean_scores, params in zip(cvres['mean_test_score'], cvres['params']):
+    print(np.sqrt(-mean_scores),params)
+
+
+# 6.2 After model is build we need to find the feature performances
+
+# In[87]:
+
+
+#Analyse the best models and their errors
+#See the importance score of each attribute in GridSeachCv
+#IF ML is good we need to find feature importance
+#Finding which feature played best role in the model or estimator
+
+feature_importances= grid_search.best_estimator_.feature_importances_
+extra_attribs=["rooms_per_hhold","pop_perhhold", "bedrooms_per_room"]
+cat_encoder=cat_pipeline.named_steps["cat_encoder"]
+cat_one_hot_attribs=list(cat_encoder.categories_[0])
+attributes=num_attribs+extra_attribs+cat_one_hot_attribs
+sorted(zip(feature_importances, attributes), reverse=True)
+
+
+# In[91]:
+
+
+strat_test_set.head(2)
+
+
+# 6.3Evaluate model on the test set
+
+# In[92]:
+
+
+#Evaluate The model on true Test data
+
+final_model = grid_search.best_estimator_
+
+#predictors & Labels
+
+X_test = strat_test_set.drop("median_house_value", axis=1)
+y_test =  strat_test_set["median_house_value"].copy()
+
+
+# In[93]:
+
+
+#run full Pipeline
+X_test_prepared = full_pipeline.transform(X_test)
+
+
+# In[95]:
+
+
+#evaluate final model on the test set
+
+final_predictions = final_model.predict(X_test_prepared)
+
+
+# In[102]:
+
+
+#calculate rmse
+final_mse = mean_squared_error(y_test, final_predictions )
+final_rmse=np.sqrt(final_mse)
+final_rmse
+
+
+# In[100]:
+
+
+#Evluate final model on the test
+
+final_rmse = final_model.predict(X_test_prepared)
+final_rmse
+
+
+# In[ ]:
+
+
+
+
+
+# In[ ]:
+
+
+
+
